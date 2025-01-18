@@ -3,6 +3,7 @@ from models import db, YoutubeChannel, YoutubeVideo
 from typing import Optional, Dict, Any, List
 from sqlalchemy.exc import IntegrityError
 import requests
+from urllib.parse import urlparse, parse_qs
 from utils.main import load_api_key, format_datetime
 from typing import List, Dict, Any, Optional
 
@@ -67,6 +68,52 @@ def store_new_video(video_data: Dict[str, Any]) -> None:
     except IntegrityError:
         db.session.rollback()  # Rollback in case of any integrity errors 
 
+def get_youtube_video_metadata(video_url):
+    """使用 YouTube Data API 获取视频元数据包括题、描述、缩略图、频道标题、发布时间、标签和是否包含转录。"""
+    # Parse the URL and extract the video ID from the query parameters
+    parsed_url = urlparse(video_url)
+    video_id = parse_qs(parsed_url.query).get('v')
+
+    if not video_id or not video_id[0]:
+        return {'error': 'Invalid YouTube URL'}
+
+    video_id = video_id[0]  # Get the first video ID from the list
+
+    url = f"https://www.googleapis.com/youtube/v3/videos?id={video_id}&key={api_key}&part=snippet,contentDetails"
+
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an error for bad responses
+        data = response.json()
+
+        if 'items' not in data or not data['items']:
+            return {
+                'error': 'Video not found or no metadata available.'
+            }
+
+        video_info = data['items'][0]
+        title = video_info['snippet'].get('title', 'Unknown Title')
+        description = video_info['snippet'].get('description', 'No description available.')
+        thumbnails = video_info['snippet'].get('thumbnails', {})
+        channel_title = video_info['snippet'].get('channelTitle', 'Unknown Channel')
+        published_at = video_info['snippet'].get('publishedAt', 'Unknown Publish Date')
+        tags = video_info['snippet'].get('tags', [])
+
+        return {
+            'title': title,
+            'description': description,
+            'thumbnails': thumbnails,
+            'channel_title': channel_title,
+            'published_at': published_at,
+            'tags': tags,
+            'language': video_info['snippet'].get('defaultAudioLanguage', 'Unknown Language'),
+        }
+    except Exception as e:
+        current_app.logger.error(f"Error retrieving metadata for video URL {video_url}: {str(e)}")
+        return {
+            'error': str(e)
+        }
+    
 def get_new_videos_from_youtuber(channel_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
     """获取指定 YouTuber 在给定日期范围内发布的新视频。"""
 
