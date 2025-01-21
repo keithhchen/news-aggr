@@ -68,6 +68,60 @@ def store_new_video(video_data: Dict[str, Any]) -> None:
     except IntegrityError:
         db.session.rollback()  # Rollback in case of any integrity errors 
 
+def update_missing_transcripts(limit: int = 2) -> List[Dict[str, Any]]:
+    """Fetch and store transcripts for videos that don't have them."""
+    videos = YoutubeVideo.query.filter(
+        YoutubeVideo.formatted_transcript.is_(None)
+    ).limit(limit).all()
+    
+    results = []
+    for video in videos:
+        try:
+            data = get_transcription(video.url)
+            if 'error' not in data:
+                video.formatted_transcript = data.get('formatted_transcript')
+                video.download_url = data.get('download_url')
+                db.session.commit()
+                status = 'success'
+                error = None
+            else:
+                status = 'error'
+                error = data['error']
+        except Exception as e:
+            current_app.logger.error(f"Error processing video {video.video_id}: {str(e)}")
+            db.session.rollback()
+            status = 'error'
+            error = str(e)
+            
+        results.append({
+            'video_id': video.video_id,
+            'title': video.title,
+            'status': status,
+            'error': error
+        })
+    
+    return results
+
+def get_transcription(video_url):
+    """Retrieve transcription and metadata for a given video URL."""
+    transcription_service = "https://yt-dlp-flask-599346845441.asia-east1.run.app"
+    api_url = f"{transcription_service}/transcribe?url={video_url}"
+    
+    try:
+        response = requests.get(api_url)
+        response.raise_for_status()  # Raise an error for bad responses
+        data = response.json()
+
+        return {
+            "download_url": data.get("download_url"),
+            "formatted_transcript": data.get("formatted_transcript")
+        }
+    except Exception as e:
+        current_app.logger.error(f"Error retrieving transcription for video URL {video_url}: {str(e)}")
+        return {
+            'error': str(e)
+        }
+    
 def get_youtube_video_metadata(video_url):
     """使用 YouTube Data API 获取视频元数据包括题、描述、缩略图、频道标题、发布时间、标签和是否包含转录。"""
     # Parse the URL and extract the video ID from the query parameters
@@ -135,7 +189,9 @@ def get_new_videos_from_youtuber(channel_id: str, start_date: str, end_date: str
                     'channel_title': item['snippet']['channelTitle'],
                     'channel_id': channel_id,
                     'url': f"https://www.youtube.com/watch?v={item['id']['videoId']}",
-                    'thumbnail_url': item['snippet']['thumbnails']['default']['url']
+                    'thumbnail_url': item['snippet']['thumbnails']['default']['url'],
+                    'description': item['snippet'].get('description', ''),
+                    'tags': item['snippet'].get('tags', [])
                 }
                 new_videos.append(video_info)
 
@@ -144,15 +200,27 @@ def get_new_videos_from_youtuber(channel_id: str, start_date: str, end_date: str
 
     return new_videos
 
-def get_and_store_new_videos(start_date: str, end_date: str) -> List[Dict[str, Any]]:
+def get_and_store_new_videos(start_date: str, end_date: str, handle: Optional[str] = None) -> List[Dict[str, Any]]:
     """获取所有 YouTube 频道在给定日期范围内的新视频并存储到数据库。"""
-
+    
     all_new_videos = []
-    channels = get_all_channels()  # Get all YouTube channels from the database
+    if handle:
+        if not handle.startswith('@'):
+            handle = f'@{handle}'
+        current_app.logger.info(handle)
+        # Get specific channel if handle is provided
+        channel = YoutubeChannel.query.filter(YoutubeChannel.handle.ilike(handle)).first()
+        current_app.logger.info(channel)
+        if not channel:
+            return []  # Return empty list if no matching channel found
+        channels = [channel.to_dict()]
+    else:
+        # Get all channels if no handle is provided
+        channels = get_all_channels()
 
     for channel in channels:
-        channel_id = channel['channel_id']  # Adjust based on your channel data structure
-        new_videos = get_new_videos_from_youtuber(channel_id, start_date, end_date)  # Get new videos for the channel
+        channel_id = channel['channel_id']
+        new_videos = get_new_videos_from_youtuber(channel_id, start_date, end_date)
         
         for video in new_videos:
             store_new_video(video)  # Store each new video in the database
@@ -160,11 +228,20 @@ def get_and_store_new_videos(start_date: str, end_date: str) -> List[Dict[str, A
 
     return all_new_videos
 
-def find_and_store_channel_by_name(channel_name: str) -> Optional[Dict[str, Any]]:
+def find_and_store_channel_by_name(handle: str) -> Optional[Dict[str, Any]]:
     """根据频道名称查找频道 ID 并存储新频道。"""
+    # Ensure handle starts with @
+    if not handle.startswith('@'):
+        handle = f'@{handle}'
+    
+    # First check if channel exists in database using case-insensitive match
+    
+    existing_channel = YoutubeChannel.query.filter(YoutubeChannel.handle.ilike(handle)).first()
+    if existing_channel:
+        return existing_channel.to_dict()
 
-    url = f"https://www.googleapis.com/youtube/v3/search?key={api_key}&q={channel_name}&type=channel&part=id"
-
+    url = f"https://www.googleapis.com/youtube/v3/search?key={api_key}&q={handle}&type=channel&part=id"
+    
     try:
         response = requests.get(url)
         response.raise_for_status()  # Raise an error for bad responses
@@ -189,6 +266,7 @@ def find_and_store_channel_by_name(channel_name: str) -> Optional[Dict[str, Any]
                     'description': channel_info.get('description', ''),
                     'published_at': published_at,
                     'thumbnail_url': channel_info.get('thumbnails', {}).get('default', {}).get('url', ''),
+                    'handle': channel_info.get('customUrl', '')  # YouTube handle/custom URL
                 }
                 new_channel = create_channel(channel_data)  # Store the new channel
                 return new_channel
@@ -196,5 +274,5 @@ def find_and_store_channel_by_name(channel_name: str) -> Optional[Dict[str, Any]
         return None 
 
     except Exception as e:
-        current_app.logger.error(f"Error finding channel by name '{channel_name}': {str(e)}")
+        current_app.logger.error(f"Error finding channel by name '{handle}': {str(e)}")
         return None

@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Integer, String, DateTime, Text
+from sqlalchemy import Integer, String, DateTime, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 from models.db import db
@@ -15,6 +15,9 @@ class YoutubeVideo(db.Model):
     channel_id: Mapped[str] = mapped_column(String(255), nullable=False)
     url: Mapped[str] = mapped_column(String(255), nullable=False)
     thumbnail_url: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text)
+    formatted_transcript: Mapped[str] = mapped_column(Text)
+    tags: Mapped[str] = mapped_column(JSON)
 
     def __repr__(self) -> str:
         return f'<Video {self.title}>' 
@@ -28,7 +31,10 @@ class YoutubeVideo(db.Model):
             'channel_title': self.channel_title,
             'channel_id': self.channel_id,
             'thumbnail_url': self.thumbnail_url,
-            'url': self.url
+            'url': self.url,
+            'description': self.description,
+            'formatted_transcript': self.formatted_transcript,
+            'tags': self.tags
         }
 
 class YoutubeChannel(db.Model):
@@ -37,6 +43,7 @@ class YoutubeChannel(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     channel_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    handle: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text)
     published_at: Mapped[datetime] = mapped_column(DateTime)
     thumbnail_url: Mapped[str] = mapped_column(String(255))
@@ -51,6 +58,7 @@ class YoutubeChannel(db.Model):
             'id': self.id,
             'channel_id': self.channel_id,
             'title': self.title,
+            'handle': self.handle,
             'description': self.description,
             'published_at': self.published_at.isoformat() if self.published_at else None,
             'thumbnail_url': self.thumbnail_url,

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from services.youtube_service import create_channel, get_channel, update_channel, delete_channel, find_and_store_channel_by_name, get_and_store_new_videos
+from services.youtube_service import create_channel, get_channel, update_channel, delete_channel, find_and_store_channel_by_name, get_and_store_new_videos, update_missing_transcripts
 import traceback
 from datetime import datetime
 
@@ -40,6 +40,12 @@ def delete_channel_endpoint(channel_id):
     if channel is None:
         return jsonify({"error": "Channel not found"}), 404
     return jsonify({"message": "Channel deleted successfully"}), 204
+
+@youtube_bp.route('/batch_transcribe', methods=['GET'])
+def batch_transcribe_endpoint():
+    results = update_missing_transcripts()
+    return jsonify(results)
+
 
 @youtube_bp.route('/channel/find/<string:name>', methods=['GET'])
 def find_channel(name: str):
@@ -93,8 +99,11 @@ def new_videos():
         return jsonify({"error": "start_date and end_date must be in the format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ."}), 400
 
     try:
+        # Get optional handle from query parameters
+        handle = request.args.get('handle', None)  # Default to None if not provided
+        
         # Call the function to get and store new videos
-        new_videos = get_and_store_new_videos(start_date, end_date)
+        new_videos = get_and_store_new_videos(start_date, end_date, handle)
         return jsonify(new_videos), 200  # Return the list of new videos
     except Exception as e:
         current_app.logger.error(f"Error retrieving new videos: {str(e)}")
