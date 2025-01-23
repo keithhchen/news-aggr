@@ -5,6 +5,10 @@ from datetime import datetime
 
 youtube_bp = Blueprint('youtube', __name__)
 
+@youtube_bp.route('/', methods=['GET'])
+def index():
+    return "Hello, World!"
+
 @youtube_bp.route('/channel', methods=['POST'])
 def create_channel_endpoint():
     """Create a new YouTube channel."""

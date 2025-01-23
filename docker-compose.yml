@@ -13,6 +13,7 @@ services:
     # - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
 
   app_dev:
+    container_name: news
     build:
       context: .
       dockerfile: Dockerfile
@@ -20,9 +21,15 @@ services:
         FLASK_ENV: development
     ports:
       - "5002:5000"
+    networks:
+      - custom_network
     volumes:
       - .:/app # Mount the current directory for hot reloading in development
     environment:
       # - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
       - FLASK_ENV=development
       - FLASK_DEBUG=1
+
+networks:
+  custom_network:
+    external: true

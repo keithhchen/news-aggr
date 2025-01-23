@@ -104,8 +104,9 @@ def update_missing_transcripts(limit: int = 2) -> List[Dict[str, Any]]:
 
 def get_transcription(video_url):
     """Retrieve transcription and metadata for a given video URL."""
-    transcription_service = "https://yt-dlp-flask-599346845441.asia-east1.run.app"
-    api_url = f"{transcription_service}/transcribe?url={video_url}"
+    # api_host = "https://yt-dlp-flask-599346845441.asia-east1.run.app"
+    api_host = "http://yt:5000" # docker network
+    api_url = f"{api_host}/transcribe?url={video_url}"
     
     try:
         response = requests.get(api_url)
@@ -240,38 +241,32 @@ def find_and_store_channel_by_name(handle: str) -> Optional[Dict[str, Any]]:
     if existing_channel:
         return existing_channel.to_dict()
 
-    url = f"https://www.googleapis.com/youtube/v3/search?key={api_key}&q={handle}&type=channel&part=id"
+    # Direct channel lookup using handle
+    # custom_url = handle.replace('@', '')
+    channel_details_url = f"https://www.googleapis.com/youtube/v3/channels?key={api_key}&forHandle={handle}&part=snippet"
     
     try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an error for bad responses
-        data = response.json()
+        details_response = requests.get(channel_details_url)
+        details_response.raise_for_status()
+        details_data = details_response.json()
 
-        if 'items' in data and data['items']:
-            channel_id = data['items'][0]['id']['channelId']  # Get the first channel ID
-            
-            # Fetch additional channel details
-            channel_details_url = f"https://www.googleapis.com/youtube/v3/channels?key={api_key}&id={channel_id}&part=snippet"
-            details_response = requests.get(channel_details_url)
-            details_response.raise_for_status()
-            details_data = details_response.json()
+        if 'items' in details_data and details_data['items']:
+            channel_info = details_data['items'][0]['snippet']
+            channel_id = details_data['items'][0]['id']
+            published_at = format_datetime(channel_info.get('publishedAt'))
 
-            if 'items' in details_data and details_data['items']:
-                channel_info = details_data['items'][0]['snippet']
-                published_at = format_datetime(channel_info.get('publishedAt'))  # Use the new function
+            channel_data = {
+                'channel_id': channel_id,
+                'title': channel_info.get('title', 'Unknown Title'),
+                'description': channel_info.get('description', ''),
+                'published_at': published_at,
+                'thumbnail_url': channel_info.get('thumbnails', {}).get('default', {}).get('url', ''),
+                'handle': channel_info.get('customUrl', '')
+            }
+            new_channel = create_channel(channel_data)
+            return new_channel
 
-                channel_data = {
-                    'channel_id': channel_id,
-                    'title': channel_info.get('title', 'Unknown Title'),
-                    'description': channel_info.get('description', ''),
-                    'published_at': published_at,
-                    'thumbnail_url': channel_info.get('thumbnails', {}).get('default', {}).get('url', ''),
-                    'handle': channel_info.get('customUrl', '')  # YouTube handle/custom URL
-                }
-                new_channel = create_channel(channel_data)  # Store the new channel
-                return new_channel
-
-        return None 
+        return None
 
     except Exception as e:
         current_app.logger.error(f"Error finding channel by name '{handle}': {str(e)}")
