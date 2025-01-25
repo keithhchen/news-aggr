@@ -1,7 +1,9 @@
 from flask import current_app
-from models import db, Artefact
-from typing import Optional, Dict, Any, List
+from models import db, Artefact, YoutubeVideo
+from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.exc import IntegrityError
+import requests
+import services.youtube_video_service as YoutubeVideoService
 
 def create_artefact(artefact_data: Dict[str, Any]) -> Dict[str, Any]:
     """创建新的 artefact 记录"""
@@ -79,3 +81,53 @@ def mark_artefact_as_used(artefact_id: int) -> Optional[Dict[str, Any]]:
 def mark_artefact_as_unused(artefact_id: int) -> Optional[Dict[str, Any]]:
     """将 artefact 标记为未使用"""
     return update_artefact(artefact_id, {'used': 0})
+
+# 源表到模型的映射
+SOURCE_MODEL_MAP = {
+    'youtube_videos': YoutubeVideoService
+}
+
+
+def process_artefact_data(source: str, source_id: str) -> Optional[Dict[str, Any]]:
+    """处理 artefact 数据，包括从源表获取数据和调用外部 API"""
+
+    try:
+        if source not in SOURCE_MODEL_MAP:
+            error_msg = f"Invalid source type: {source}"
+            current_app.logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        service = SOURCE_MODEL_MAP[source]
+        
+        # 从源表中获取数据
+        source_material = service.prepare_source_for_artefact(source_id)
+        if not source_material:
+            error_msg = f"Invalid source id: {source_id}"
+            current_app.logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # api_host = "https://wpa-langgraph-599346845441.asia-east1.run.app"
+        api_host = "http://lang_dev:8000"
+        
+        # 调用外部 API
+        response = requests.post(
+            f"{api_host}/process",
+            json= source_material
+        )
+        response.raise_for_status()
+        response_data = response.json()
+
+        # 准备 artefact 数据
+        artefact_data = {
+            "source": source,
+            "source_id": source_id,
+            "title": response_data.get("title", ""),
+            "full_text": response_data.get("full_text", "")
+        }
+        
+        # Store in database
+        return create_artefact(artefact_data)
+    except Exception as e:
+        error_msg = f"Error processing artefact data: {str(e)}"
+        current_app.logger.error(error_msg)
+        raise

@@ -5,3 +5,4 @@ google-cloud-firestore==2.*
 Flask-SQLAlchemy==3.0.0
 PyMySQL==1.1.0
 SQLAlchemy>=2.0.0
+GitPython==3.1.40

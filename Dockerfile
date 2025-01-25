@@ -20,6 +20,9 @@ COPY credentials.json /app/credentials.json
 # ENV CREDENTIALS=/credentials/credentials
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install git
+RUN apt-get update && apt-get install -y git
+
 # Copy the rest of your application code to the container
 COPY . .
 

@@ -47,8 +47,40 @@ def delete_channel_endpoint(channel_id):
 
 @youtube_bp.route('/batch_transcribe', methods=['GET'])
 def batch_transcribe_endpoint():
-    results = update_missing_transcripts()
-    return jsonify(results)
+    """Process transcripts for videos that don't have them yet."""
+    try:
+        limit = request.args.get('limit', type=int)  # Get limit from query params, will be None if not provided
+        results = update_missing_transcripts(limit=limit)
+        
+        # Check if there are any errors in the results
+        if isinstance(results, dict) and 'errors' in results:
+            # Return success=false if all videos failed
+            if len(results.get('errors', [])) == results.get('total', 0):
+                return jsonify({
+                    "success": False,
+                    "message": "All transcript updates failed",
+                    **results
+                }), 500
+            # Return success=true with partial failures if some succeeded
+            return jsonify({
+                "success": True,
+                "message": "Some transcripts were updated with errors",
+                **results
+            }), 207  # 207 Multi-Status
+            
+        return jsonify({
+            "success": True,
+            "message": "All transcripts updated successfully",
+            **results
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in batch transcribe: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": "An error occurred during batch transcription",
+            "details": str(e)
+        }), 500
 
 
 @youtube_bp.route('/channel/find/<string:name>', methods=['GET'])

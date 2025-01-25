@@ -68,31 +68,44 @@ def store_new_video(video_data: Dict[str, Any]) -> None:
     except IntegrityError:
         db.session.rollback()  # Rollback in case of any integrity errors 
 
-def update_missing_transcripts(limit: int = 2) -> List[Dict[str, Any]]:
+def update_missing_transcripts(limit: int = 2) -> Dict[str, Any]:
     """Fetch and store transcripts for videos that don't have them."""
     videos = YoutubeVideo.query.filter(
         YoutubeVideo.formatted_transcript.is_(None)
     ).limit(limit).all()
     
     results = []
+    total = len(videos)
+    errors = []
+    success_count = 0
+    
     for video in videos:
         try:
             data = get_transcription(video.url)
             if 'error' not in data:
-                video.formatted_transcript = data.get('formatted_transcript')
-                video.download_url = data.get('download_url')
-                db.session.commit()
-                status = 'success'
-                error = None
+                try:
+                    video.formatted_transcript = data.get('formatted_transcript')
+                    video.download_url = data.get('download_url')
+                    db.session.commit()
+                    success_count += 1
+                    status = 'success'
+                    error = None
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Database error for video {video.video_id}: {str(e)}")
+                    status = 'error'
+                    error = f"Database error: {str(e)}"
+                    errors.append({"video_id": video.video_id, "error": error})
             else:
                 status = 'error'
                 error = data['error']
+                errors.append({"video_id": video.video_id, "error": error})
         except Exception as e:
             current_app.logger.error(f"Error processing video {video.video_id}: {str(e)}")
-            db.session.rollback()
             status = 'error'
             error = str(e)
-            
+            errors.append({"video_id": video.video_id, "error": error})
+        
         results.append({
             'video_id': video.video_id,
             'title': video.title,
@@ -100,7 +113,13 @@ def update_missing_transcripts(limit: int = 2) -> List[Dict[str, Any]]:
             'error': error
         })
     
-    return results
+    return {
+        "total": total,
+        "success_count": success_count,
+        "error_count": len(errors),
+        "results": results,
+        "errors": errors
+    }
 
 def get_transcription(video_url):
     """Retrieve transcription and metadata for a given video URL."""
@@ -162,6 +181,7 @@ def get_youtube_video_metadata(video_url):
             'published_at': published_at,
             'tags': tags,
             'language': video_info['snippet'].get('defaultAudioLanguage', 'Unknown Language'),
+            'duration': video_info['contentDetails'].get('duration', 'PT0S'),
         }
     except Exception as e:
         current_app.logger.error(f"Error retrieving metadata for video URL {video_url}: {str(e)}")
@@ -169,6 +189,31 @@ def get_youtube_video_metadata(video_url):
             'error': str(e)
         }
     
+def parse_duration(duration: str) -> int:
+    """Parse ISO 8601 duration format (PT#H#M#S) to seconds without dependencies.
+    Example: PT1H2M10S -> 3730 seconds (1h * 3600 + 2m * 60 + 10s)
+    """
+    duration = duration.upper().replace('PT', '')
+    hours = minutes = seconds = 0
+    
+    # Find hours
+    if 'H' in duration:
+        h_split = duration.split('H')
+        hours = int(h_split[0])
+        duration = h_split[1] if len(h_split) > 1 else ''
+    
+    # Find minutes
+    if 'M' in duration:
+        m_split = duration.split('M')
+        minutes = int(m_split[0])
+        duration = m_split[1] if len(m_split) > 1 else ''
+    
+    # Find seconds
+    if 'S' in duration:
+        seconds = int(duration.replace('S', ''))
+    
+    return hours * 3600 + minutes * 60 + seconds
+
 def get_new_videos_from_youtuber(channel_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
     """获取指定 YouTuber 在给定日期范围内发布的新视频。"""
 
@@ -182,19 +227,38 @@ def get_new_videos_from_youtuber(channel_id: str, start_date: str, end_date: str
 
         if 'items' in data:
             for item in data['items']:
-
-                video_info = {
-                    'title': item['snippet']['title'],
-                    'video_id': item['id']['videoId'],
-                    'published_at': format_datetime(item['snippet']['publishedAt']),
-                    'channel_title': item['snippet']['channelTitle'],
-                    'channel_id': channel_id,
-                    'url': f"https://www.youtube.com/watch?v={item['id']['videoId']}",
-                    'thumbnail_url': item['snippet']['thumbnails']['default']['url'],
-                    'description': item['snippet'].get('description', ''),
-                    'tags': item['snippet'].get('tags', [])
-                }
-                new_videos.append(video_info)
+                # Get detailed video information including duration
+                video_details_url = f"https://www.googleapis.com/youtube/v3/videos?key={api_key}&id={item['id']['videoId']}&part=snippet,contentDetails"
+                try:
+                    details_response = requests.get(video_details_url)
+                    details_response.raise_for_status()
+                    details_data = details_response.json()
+                    
+                    if not details_data.get('items'):
+                        continue
+                        
+                    video_details = details_data['items'][0]
+                    duration = video_details['contentDetails'].get('duration', 'PT0S')
+                    
+                    # Skip videos shorter than 3 minutes (180 seconds)
+                    if parse_duration(duration) < 180:
+                        continue
+                        
+                    video_info = {
+                        'title': item['snippet']['title'],
+                        'video_id': item['id']['videoId'],
+                        'published_at': format_datetime(item['snippet']['publishedAt']),
+                        'channel_title': item['snippet']['channelTitle'],
+                        'channel_id': channel_id,
+                        'url': f"https://www.youtube.com/watch?v={item['id']['videoId']}",
+                        'thumbnail_url': item['snippet']['thumbnails']['default']['url'],
+                        'description': item['snippet'].get('description', ''),
+                        'tags': item['snippet'].get('tags', [])
+                    }
+                    new_videos.append(video_info)
+                except Exception as e:
+                    current_app.logger.error(f"Error getting details for video {item['id']['videoId']}: {str(e)}")
+                    continue
 
     except Exception as e:
         current_app.logger.error(f"Error retrieving videos for channel {channel_id}: {str(e)}")
@@ -271,3 +335,16 @@ def find_and_store_channel_by_name(handle: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         current_app.logger.error(f"Error finding channel by name '{handle}': {str(e)}")
         return None
+
+def get_youtube_video_by_id(video_id: str) -> Optional[Dict[str, Any]]:
+    """根据视频 ID 获取视频数据"""
+    video = YoutubeVideo.query.filter_by(video_id=video_id).first()
+    if not video:
+        current_app.logger.error(f"Video not found with ID: {video_id}")
+        return None
+        
+    return {
+        'title': video.title,
+        'description': video.description,
+        'formatted_transcript': video.formatted_transcript
+    }

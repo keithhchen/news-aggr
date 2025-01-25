@@ -5,6 +5,8 @@ from flask import Flask, current_app
 from models import db
 from utils.main import load_api_key
 from controller.youtube_bp import youtube_bp
+from controller.artefact_bp import artefact_bp
+from controller.publisher_bp import publisher_bp
 
 app = Flask(__name__)
 
@@ -14,6 +16,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 app.register_blueprint(youtube_bp, url_prefix='/youtube')
+app.register_blueprint(artefact_bp, url_prefix='/artefact')
+app.register_blueprint(publisher_bp, url_prefix='/publisher')
 
 # BUCKET_NAME = 'keith_speech_to_text'
 # storage_client = storage.Client()
