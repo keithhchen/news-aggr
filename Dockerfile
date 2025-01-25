@@ -16,7 +16,7 @@ RUN mkdir -p /app/tmp && chmod 777 /app/tmp
 COPY requirements.txt .
 
 # Google Cloud credentials
-COPY credentials.json /credentials/credentials
+# COPY credentials.json /app/credentials.json
 # ENV CREDENTIALS=/credentials/credentials
 RUN pip install --no-cache-dir -r requirements.txt
 

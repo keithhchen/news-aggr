@@ -1,16 +1,17 @@
 import json
+import os
 import datetime
 
 def load_api_key(api_key_name):
-    credentials_path = '/app/credentials.json'
-    if not credentials_path:
-        raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
     
-    # Load the JSON credentials file
-    with open(credentials_path, 'r') as file:
-        credentials = json.load(file)
+    from dotenv import load_dotenv
+    load_dotenv()
     
-    return credentials.get(api_key_name)
+    api_key_name = api_key_name.upper()
+    env_value = os.environ.get(api_key_name)
+    if not env_value:
+        raise ValueError(f"Environment variable {api_key_name} not found")    
+    return env_value
 
 def format_datetime(input_datetime_str: str, input_format: str = '%Y-%m-%dT%H:%M:%SZ', output_format: str = '%Y-%m-%d %H:%M:%S') -> str:
     """Convert a datetime string from one format to another."""

@@ -26,7 +26,6 @@ services:
     volumes:
       - .:/app # Mount the current directory for hot reloading in development
     environment:
-      # - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
       - FLASK_ENV=development
       - FLASK_DEBUG=1
 
