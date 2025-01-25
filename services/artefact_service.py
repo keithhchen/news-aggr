@@ -106,8 +106,8 @@ def process_artefact_data(source: str, source_id: str) -> Optional[Dict[str, Any
             current_app.logger.error(error_msg)
             raise ValueError(error_msg)
         
-        # api_host = "https://wpa-langgraph-599346845441.asia-east1.run.app"
-        api_host = "http://lang_dev:8000"
+        api_host = "https://wpa-langgraph-599346845441.asia-east1.run.app"
+        # api_host = "http://lang_dev:8000"
         
         # 调用外部 API
         response = requests.post(
