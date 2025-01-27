@@ -9,5 +9,8 @@ CREATE TABLE youtube_videos (
     url VARCHAR(255) NOT NULL,
     description TEXT,  -- Using TEXT for longer descriptions
     formatted_transcript TEXT,  -- Using TEXT for potentially long transcripts
-    tags JSON  -- Using JSON type to store array of tags
+    tags JSON,  -- Using JSON type to store array of tags
+    duration INT,  -- Duration in seconds
+    created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

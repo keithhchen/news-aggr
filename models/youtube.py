@@ -18,6 +18,7 @@ class YoutubeVideo(db.Model):
     description: Mapped[str] = mapped_column(Text)
     formatted_transcript: Mapped[str] = mapped_column(Text)
     tags: Mapped[str] = mapped_column(JSON)
+    duration: Mapped[int] = mapped_column(Integer)
 
     def __repr__(self) -> str:
         return f'<Video {self.title}>' 
@@ -34,7 +35,8 @@ class YoutubeVideo(db.Model):
             'url': self.url,
             'description': self.description,
             'formatted_transcript': self.formatted_transcript,
-            'tags': self.tags
+            'tags': self.tags,
+            'duration': self.duration
         }
 
 class YoutubeChannel(db.Model):

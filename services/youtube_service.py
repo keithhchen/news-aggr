@@ -50,23 +50,33 @@ def get_all_channels() -> List[Dict[str, Any]]:
     channels = YoutubeChannel.query.all()
     return [channel.to_dict() for channel in channels]
 
-def store_new_video(video_data: Dict[str, Any]) -> None:
-    """Store a new video in the database, skipping if it already exists."""
+def store_new_video(video_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Store a new video in the database or update if it already exists.
+    Returns a dictionary containing the video data and its status (new/updated).
+    """
     # Check for existing video by video_id
     existing_video = YoutubeVideo.query.filter_by(video_id=video_data['video_id']).first()
     
-    if existing_video:
-        # Video already exists, skip insertion
-        return  # Exit the function without adding a new video
-
-    # If the video does not exist, create a new video entry
-    new_video = YoutubeVideo(**video_data)
-    db.session.add(new_video)
-    
     try:
+        if existing_video:
+            # Update existing video's data
+            for key, value in video_data.items():
+                setattr(existing_video, key, value)
+            status = 'updated'
+            video = existing_video
+        else:
+            # Create a new video if it doesn't exist
+            new_video = YoutubeVideo(**video_data)
+            db.session.add(new_video)
+            status = 'new'
+            video = new_video
+        
         db.session.commit()  # Commit the changes
+        result = video.to_dict()
+        result['status'] = status
+        return result
     except IntegrityError:
-        db.session.rollback()  # Rollback in case of any integrity errors 
+        db.session.rollback()  # Rollback in case of any integrity errors
 
 def update_missing_transcripts(limit: int = 2) -> Dict[str, Any]:
     """Fetch and store transcripts for videos that don't have them."""
@@ -226,49 +236,61 @@ def get_new_videos_from_youtuber(channel_id: str, start_date: str, end_date: str
         data = response.json()
 
         if 'items' in data:
-            for item in data['items']:
-                # Get detailed video information including duration
-                video_details_url = f"https://www.googleapis.com/youtube/v3/videos?key={api_key}&id={item['id']['videoId']}&part=snippet,contentDetails"
-                try:
-                    details_response = requests.get(video_details_url)
-                    details_response.raise_for_status()
-                    details_data = details_response.json()
-                    
-                    if not details_data.get('items'):
-                        continue
-                        
-                    video_details = details_data['items'][0]
-                    duration = video_details['contentDetails'].get('duration', 'PT0S')
-                    
-                    # Skip videos shorter than 3 minutes (180 seconds)
-                    if parse_duration(duration) < 180:
-                        continue
-                        
-                    video_info = {
-                        'title': item['snippet']['title'],
-                        'video_id': item['id']['videoId'],
-                        'published_at': format_datetime(item['snippet']['publishedAt']),
-                        'channel_title': item['snippet']['channelTitle'],
-                        'channel_id': channel_id,
-                        'url': f"https://www.youtube.com/watch?v={item['id']['videoId']}",
-                        'thumbnail_url': item['snippet']['thumbnails']['default']['url'],
-                        'description': item['snippet'].get('description', ''),
-                        'tags': item['snippet'].get('tags', [])
-                    }
-                    new_videos.append(video_info)
-                except Exception as e:
-                    current_app.logger.error(f"Error getting details for video {item['id']['videoId']}: {str(e)}")
+            # Collect all video IDs first
+            video_ids = [item['id']['videoId'] for item in data['items']]
+            
+            # Get details for all videos in one API call
+            videos_url = f"https://www.googleapis.com/youtube/v3/videos?key={api_key}&id={','.join(video_ids)}&part=snippet,contentDetails"
+            details_response = requests.get(videos_url)
+            details_response.raise_for_status()
+            details_data = details_response.json()
+            
+            # Create a mapping of video IDs to their search results
+            search_items = {item['id']['videoId']: item for item in data['items']}
+            
+            # Process each video with its full details
+            for video_details in details_data.get('items', []):
+                video_id = video_details['id']
+                duration_seconds = parse_duration(video_details['contentDetails'].get('duration', 'PT0S'))
+                
+                # Skip videos shorter than 3 minutes (180 seconds)
+                if duration_seconds < 180:
                     continue
+                
+                search_item = search_items[video_id]
+                video_info = {
+                    'title': video_details['snippet']['title'],
+                    'video_id': video_id,
+                    'published_at': format_datetime(video_details['snippet']['publishedAt']),
+                    'channel_title': video_details['snippet']['channelTitle'],
+                    'channel_id': channel_id,
+                    'url': f"https://www.youtube.com/watch?v={video_id}",
+                    'thumbnail_url': video_details['snippet']['thumbnails']['default']['url'],
+                    'description': video_details['snippet'].get('description', ''),
+                    'tags': video_details['snippet'].get('tags', []),
+                    'duration': duration_seconds  # Store only the duration in seconds
+                }
+                new_videos.append(video_info)
 
     except Exception as e:
         current_app.logger.error(f"Error retrieving videos for channel {channel_id}: {str(e)}")
 
     return new_videos
 
-def get_and_store_new_videos(start_date: str, end_date: str, handle: Optional[str] = None) -> List[Dict[str, Any]]:
-    """获取所有 YouTube 频道在给定日期范围内的新视频并存储到数据库。"""
+def get_and_store_new_videos(start_date: str, end_date: str, handle: Optional[str] = None) -> Dict[str, Any]:
+    """获取所有 YouTube 频道在给定日期范围内的新视频并存储到数据库。
+    Returns a dictionary containing:
+    - new: List of newly added videos
+    - updated: List of updated videos
+    - error: List of videos that encountered errors during processing
+    """
     
-    all_new_videos = []
+    result = {
+        'new': [],
+        'updated': [],
+        'error': []
+    }
+
     if handle:
         if not handle.startswith('@'):
             handle = f'@{handle}'
@@ -277,7 +299,7 @@ def get_and_store_new_videos(start_date: str, end_date: str, handle: Optional[st
         channel = YoutubeChannel.query.filter(YoutubeChannel.handle.ilike(handle)).first()
         current_app.logger.info(channel)
         if not channel:
-            return []  # Return empty list if no matching channel found
+            return result  # Return empty result if no matching channel found
         channels = [channel.to_dict()]
     else:
         # Get all channels if no handle is provided
@@ -285,13 +307,34 @@ def get_and_store_new_videos(start_date: str, end_date: str, handle: Optional[st
 
     for channel in channels:
         channel_id = channel['channel_id']
-        new_videos = get_new_videos_from_youtuber(channel_id, start_date, end_date)
-        
-        for video in new_videos:
-            store_new_video(video)  # Store each new video in the database
-            all_new_videos.append(video)  # Collect all new videos for return
+        try:
+            new_videos = get_new_videos_from_youtuber(channel_id, start_date, end_date)
+            
+            for video in new_videos:
+                try:
+                    store_result = store_new_video(video)  # Store each new video in the database
+                    if store_result:
+                        if store_result.get('status') == 'new':
+                            result['new'].append(store_result)
+                        elif store_result.get('status') == 'updated':
+                            result['updated'].append(store_result)
+                except Exception as e:
+                    error_info = {
+                        'video_id': video.get('video_id', 'unknown'),
+                        'error': str(e),
+                        'video_data': video
+                    }
+                    current_app.logger.error(f"Error storing video {error_info['video_id']}: {error_info['error']}")
+                    result['error'].append(error_info)
+        except Exception as e:
+            error_info = {
+                'channel_id': channel_id,
+                'error': str(e)
+            }
+            current_app.logger.error(f"Error fetching videos for channel {channel_id}: {str(e)}")
+            result['error'].append(error_info)
 
-    return all_new_videos
+    return result
 
 def find_and_store_channel_by_name(handle: str) -> Optional[Dict[str, Any]]:
     """根据频道名称查找频道 ID 并存储新频道。"""
