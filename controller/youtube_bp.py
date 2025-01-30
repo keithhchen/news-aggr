@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from services.youtube_service import create_channel, get_channel, update_channel, delete_channel, find_and_store_channel_by_name, get_and_store_new_videos, update_missing_transcripts
+from services.youtube_service import create_channel, get_channel, update_channel, delete_channel, find_and_store_channel_by_name, get_and_store_new_videos, update_missing_transcripts, get_videos
 import traceback
 from datetime import datetime
 
@@ -144,3 +144,46 @@ def new_videos():
     except Exception as e:
         current_app.logger.error(f"Error retrieving new videos: {str(e)}")
         return jsonify({"error": "An error occurred while retrieving new videos."}), 500
+    
+@youtube_bp.route('/videos', methods=['GET'])
+def list_videos():
+    """Get videos with optional filters."""
+    try:
+        # Get filter parameters from query string
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        channel_id = request.args.get('channel_id')
+        duration_min = request.args.get('duration_min', type=int)
+        duration_max = request.args.get('duration_max', type=int)
+        limit = request.args.get('limit', default=50, type=int)
+        offset = request.args.get('offset', default=0, type=int)
+
+        # Validate date formats if provided
+        if start_date:
+            try:
+                datetime.strptime(start_date, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({"error": "start_date must be in YYYY-MM-DD format"}), 400
+
+        if end_date:
+            try:
+                datetime.strptime(end_date, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({"error": "end_date must be in YYYY-MM-DD format"}), 400
+
+        # Get videos with filters
+        result = get_videos(
+            start_date=start_date,
+            end_date=end_date,
+            channel_id=channel_id,
+            duration_min=duration_min,
+            duration_max=duration_max,
+            limit=limit,
+            offset=offset
+        )
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error retrieving videos: {str(e)}")
+        return jsonify({"error": "An error occurred while retrieving videos"}), 500

@@ -6,9 +6,79 @@ import requests
 from urllib.parse import urlparse, parse_qs
 from utils.main import load_api_key, format_datetime
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 api_key = load_api_key("youtube_api_key")
 
+def get_videos(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    channel_id: Optional[str] = None,
+    duration_min: Optional[int] = None,
+    duration_max: Optional[int] = None,
+    limit: int = 50,
+    offset: int = 0,
+    include_full_text: bool = False
+) -> Dict[str, Any]:
+    """Get videos with optional filters."""
+    query = YoutubeVideo.query
+
+    # Apply filters if provided
+    if start_date:
+        start_date_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        query = query.filter(YoutubeVideo.published_at >= start_date_dt)
+    
+    if end_date:
+        end_date_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        end_date_dt = end_date_dt.replace(hour=23, minute=59, second=59)
+        query = query.filter(YoutubeVideo.published_at <= end_date_dt)
+    
+    if channel_id:
+        query = query.filter(YoutubeVideo.channel_id == channel_id)
+    
+    if duration_min is not None:
+        query = query.filter(YoutubeVideo.duration >= duration_min)
+    
+    if duration_max is not None:
+        query = query.filter(YoutubeVideo.duration <= duration_max)
+    
+    # Get total count before pagination
+    total_count = query.count()
+    
+    # Apply pagination
+    query = query.order_by(YoutubeVideo.published_at.desc())
+    query = query.limit(limit).offset(offset)
+    
+    # Execute query and convert to dict
+    videos = query.all()
+    
+    # Create custom video dict excluding long text fields
+    video_list = []
+    for video in videos:
+        video_dict = {
+            'id': video.id,
+            'title': video.title,
+            'video_id': video.video_id,
+            'published_at': video.published_at.isoformat() if video.published_at else None,
+            'channel_title': video.channel_title,
+            'channel_id': video.channel_id,
+            'thumbnail_url': video.thumbnail_url,
+            'url': video.url,
+            'tags': video.tags,
+            'duration': video.duration
+        }
+        if include_full_text:
+            video_dict['description'] = video.description
+            video_dict['formatted_transcript'] = video.formatted_transcript
+        video_list.append(video_dict)
+    
+    return {
+        'total': total_count,
+        'offset': offset,
+        'limit': limit,
+        'videos': video_list
+    }
+    
 def create_channel(channel_data: Dict[str, Any]) -> Dict[str, Any]:
     # Check for existing channel by channel_id
     existing_channel = YoutubeChannel.query.filter_by(channel_id=channel_data['channel_id']).first()
