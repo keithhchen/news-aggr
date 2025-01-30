@@ -7,11 +7,16 @@ from git import Repo
 from typing import List, Dict, Any, Optional
 from utils.main import load_api_key
 
-def get_artefacts_by_date_range(start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
-    """Retrieve artefacts created within the specified date range."""
+def get_artefacts_by_date_range(start_date: datetime) -> List[Dict[str, Any]]:
+    """Retrieve artefacts created on the specified date."""
+    # Ensure start_date is set to midnight (00:00:00)
+    start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Set end_date to the end of the start_date (23:59:59)
+    end_date = start_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
     artefacts = Artefact.query.filter(
-        Artefact.created_at >= start_date,
-        Artefact.created_at <= end_date
+        Artefact.published_at >= start_date,
+        Artefact.published_at <= end_date
     ).all()
     return [artefact.to_dict() for artefact in artefacts]
 
@@ -43,11 +48,11 @@ def get_safe_filename(full_text: str) -> str:
     safe_name = safe_name[:100]  # Limit to 100 characters
     return f"{safe_name}.md"
 
-def publish_artefacts_to_github(start_date: datetime, end_date: datetime, repo_path: str) -> Dict[str, Any]:
-    """Process artefacts and publish them to GitHub."""
+def publish_artefacts_to_github(start_date: datetime, repo_path: str) -> Dict[str, Any]:
+    """Process artefacts and publish them to GitHub for a specific date."""
     try:
-        # Get artefacts for the date range
-        artefacts = get_artefacts_by_date_range(start_date, end_date)
+        # Get artefacts for the specified date
+        artefacts = get_artefacts_by_date_range(start_date)
         
         if not artefacts:
             return {"message": "No artefacts found for the specified date range", "count": 0}
@@ -92,7 +97,7 @@ def publish_artefacts_to_github(start_date: datetime, end_date: datetime, repo_p
 
         if files_created:
             # Commit and push changes
-            commit_message = f"Add artefacts for {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+            commit_message = f"Add artefacts for {start_date.strftime('%Y-%m-%d')}"
             repo.index.commit(commit_message)
             repo.remotes.origin.push()
 

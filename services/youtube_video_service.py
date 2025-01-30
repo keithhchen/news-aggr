@@ -95,17 +95,22 @@ def prepare_source_for_artefact(id: str) -> Optional[Dict[str, Any]]:
         current_app.logger.error(f"Video not found with ID: {id}")
         return None
     
+    published_at = video.published_at.isoformat() if video.published_at else None
+    
     metadata = {
         "title": video.title,
         "source": "YouTube",
         "link": video.url,
         "description": video.description,
-        "author": video.channel_title
+        "author": video.channel_title,
+        "published_at": published_at
     }
+    
+    # Add published_at to the return data
     
     content = f"""# TITLE: {video.title} #DESCRIPTION: {video.description} #TRANSCRIPT: {video.formatted_transcript}"""
     
     return {
         "metadata": metadata,
-        "source": content
+        "source": content,
     }

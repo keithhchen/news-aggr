@@ -122,7 +122,8 @@ def process_artefact_data(source: str, source_id: str) -> Optional[Dict[str, Any
             "source": source,
             "source_id": source_id,
             "title": response_data.get("title", ""),
-            "full_text": response_data.get("full_text", "")
+            "full_text": response_data.get("full_text", ""),
+            "published_at": source_material.get("published_at")  # Add published_at from source material
         }
         
         # Store in database
