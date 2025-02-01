@@ -11,6 +11,7 @@ class Artefact(db.Model):
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     source_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     full_text: Mapped[str] = mapped_column(Text)
+    html: Mapped[str] = mapped_column(Text)
     used: Mapped[int] = mapped_column(SmallInteger, default=0)
     published_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -26,6 +27,7 @@ class Artefact(db.Model):
             'source': self.source,
             'source_id': self.source_id,
             'full_text': self.full_text,
+            'html': self.html,
             'used': self.used,
             'published_at': self.published_at.isoformat() if self.published_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
