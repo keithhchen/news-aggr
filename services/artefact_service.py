@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.exc import IntegrityError
 import requests
 import services.youtube_video_service as YoutubeVideoService
+from utils.md2html import style_html
 
 def create_artefact(artefact_data: Dict[str, Any]) -> Dict[str, Any]:
     """创建新的 artefact 记录"""
@@ -123,8 +124,10 @@ def process_artefact_data(source: str, source_id: str) -> Optional[Dict[str, Any
             "source_id": source_id,
             "title": response_data.get("title", ""),
             "full_text": response_data.get("full_text", ""),
+            "html": "",
             "published_at": source_material.get("published_at")  # Add published_at from source material
         }
+        artefact_data["html"] = style_html(artefact_data["full_text"])
         
         # Store in database
         return create_artefact(artefact_data)
