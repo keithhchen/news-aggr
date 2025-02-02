@@ -125,7 +125,7 @@ def process_artefact_data(source: str, source_id: str) -> Optional[Dict[str, Any
             "title": response_data.get("title", ""),
             "full_text": response_data.get("full_text", ""),
             "html": "",
-            "published_at": source_material.get("published_at")  # Add published_at from source material
+            "published_at": source_material["metadata"].get("published_at")  # Access published_at from metadata
         }
         artefact_data["html"] = style_html(artefact_data["full_text"])
         

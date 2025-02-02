@@ -9,7 +9,7 @@ class Artefact(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     source: Mapped[str] = mapped_column(String(50), nullable=False)
-    source_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    source_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     full_text: Mapped[str] = mapped_column(Text)
     html: Mapped[str] = mapped_column(Text)
     used: Mapped[int] = mapped_column(SmallInteger, default=0)
