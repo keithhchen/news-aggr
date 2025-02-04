@@ -105,34 +105,24 @@ def find_channel(name: str):
 @youtube_bp.route('/new_videos', methods=['POST'])
 def new_videos():
     """API endpoint to get and store new videos from all YouTube channels within a date range."""
-    data = request.get_json()
+    data = request.get_json() or {}
     
-    # Validate input data
-    start_date = data.get('start_date')
-    end_date = data.get('end_date', datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))  # Default to today in UTC
-    
-    if not start_date:
-        return jsonify({"error": "start_date is required."}), 400
+    # Default to today in UTC if no dates provided
+    start_date = data.get('start_date', datetime.utcnow().strftime('%Y-%m-%d'))  # Default to today in UTC
+    end_date = data.get('end_date', datetime.utcnow().strftime('%Y-%m-%d'))  # Default to today in UTC
 
     # Validate and format start_date and end_date
     try:
-        # Attempt to parse start_date to ensure it's valid
-        if 'T' in start_date:
-            start_date_dt = datetime.strptime(start_date, '%Y-%m-%dT%H:%M:%SZ')
-        else:
-            start_date_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        # Parse dates in YYYY-MM-DD format
+        start_date_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_date_dt = datetime.strptime(end_date, '%Y-%m-%d')
         
-        start_date = start_date_dt.strftime('%Y-%m-%dT00:00:00Z')  # Convert to ISO 8601 format with time
-        
-        if 'T' in end_date:
-            end_date_dt = datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%SZ')
-        else:
-            end_date_dt = datetime.strptime(end_date, '%Y-%m-%d')
-        
-        end_date = end_date_dt.strftime('%Y-%m-%dT00:00:00Z')  # Convert to ISO 8601 format with time
+        # Set appropriate time components
+        start_date = start_date_dt.strftime('%Y-%m-%dT00:00:00Z')  # Start of day
+        end_date = end_date_dt.replace(hour=23, minute=59, second=59).strftime('%Y-%m-%dT%H:%M:%SZ')  # End of day
     except ValueError as e:
         current_app.logger.error(f"Date parsing error: {str(e)}")  # Log the error
-        return jsonify({"error": "start_date and end_date must be in the format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ."}), 400
+        return jsonify({"error": "start_date and end_date must be in the format YYYY-MM-DD."}), 400
 
     try:
         # Get optional handle from query parameters
