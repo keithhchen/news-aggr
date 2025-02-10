@@ -328,6 +328,15 @@ def get_new_videos_from_youtuber(channel_id: str, start_date: str, end_date: str
                     continue
                 
                 search_item = search_items[video_id]
+                # Get highest resolution thumbnail available
+                thumbnails = video_details['snippet']['thumbnails']
+                thumbnail_url = (
+                    thumbnails.get('maxres', {}).get('url') or
+                    thumbnails.get('high', {}).get('url') or
+                    thumbnails.get('medium', {}).get('url') or
+                    thumbnails.get('default', {}).get('url')
+                )
+                
                 video_info = {
                     'title': video_details['snippet']['title'],
                     'video_id': video_id,
@@ -335,7 +344,7 @@ def get_new_videos_from_youtuber(channel_id: str, start_date: str, end_date: str
                     'channel_title': video_details['snippet']['channelTitle'],
                     'channel_id': channel_id,
                     'url': f"https://www.youtube.com/watch?v={video_id}",
-                    'thumbnail_url': video_details['snippet']['thumbnails']['default']['url'],
+                    'thumbnail_url': thumbnail_url,
                     'description': video_details['snippet'].get('description', ''),
                     'tags': video_details['snippet'].get('tags', []),
                     'duration': duration_seconds  # Store only the duration in seconds

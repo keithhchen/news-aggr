@@ -8,6 +8,10 @@ from utils.md2html import style_html
 
 def create_artefact(artefact_data: Dict[str, Any]) -> Dict[str, Any]:
     """创建新的 artefact 记录"""
+    # Ensure source_id is an integer to match database schema
+    if 'source_id' in artefact_data:
+        artefact_data['source_id'] = int(artefact_data['source_id'])
+    
     # 检查是否已存在相同 source_id 的记录
     existing_artefact = Artefact.query.filter_by(source_id=artefact_data['source_id']).first()
     
@@ -107,8 +111,8 @@ def process_artefact_data(source: str, source_id: str) -> Optional[Dict[str, Any
             current_app.logger.error(error_msg)
             raise ValueError(error_msg)
         
-        api_host = "https://wpa-langgraph-599346845441.asia-east1.run.app"
-        # api_host = "http://lang_dev:8000"
+        # api_host = "https://wpa-langgraph-599346845441.asia-east1.run.app"
+        api_host = "http://lang_dev:8000"
         
         # 调用外部 API
         response = requests.post(

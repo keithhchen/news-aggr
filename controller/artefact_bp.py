@@ -9,6 +9,11 @@ def create_artefact_endpoint():
     """创建新的 artefact。
     需要提供 source（数据库表名）和 source_id 参数。
     从指定的源表中获取数据，调用外部 API 处理，并将结果存储到 artefacts 表中。
+    
+    Parameters:
+        source: 数据库表名
+        source_id: 源数据ID
+        update: 是否覆盖已存在的记录 (optional, default: False)
     """
     data = request.get_json()
     if not data or 'source' not in data or 'source_id' not in data:
@@ -16,6 +21,13 @@ def create_artefact_endpoint():
     
     source = data['source']
     source_id = data['source_id']
+    update = data.get('update', False)
+    
+    # Check if artefact already exists when update is False
+    if not update:
+        existing_artefact = get_artefact_by_source_id(source_id)
+        if existing_artefact:
+            return jsonify({"error": f"Artefact with source_id {source_id} already exists"}), 409
     
     try:
         # 处理 artefact 数据
