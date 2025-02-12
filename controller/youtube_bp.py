@@ -105,11 +105,30 @@ def find_channel(name: str):
 @youtube_bp.route('/new_videos', methods=['POST'])
 def new_videos():
     """API endpoint to get and store new videos from all YouTube channels within a date range."""
-    data = request.get_json() or {}
+    try:
+        data = request.get_json()
+    except Exception:
+        data = {}
     
-    # Default to today in UTC if no dates provided
-    start_date = data.get('start_date', datetime.utcnow().strftime('%Y-%m-%d'))  # Default to today in UTC
-    end_date = data.get('end_date', datetime.utcnow().strftime('%Y-%m-%d'))  # Default to today in UTC
+    if data is None:
+        data = {}
+    
+    # Get prev days from query parameter (optional)
+    prev_days = request.args.get('prev', type=int)
+    
+    # Calculate start date based on prev_days if provided
+    if prev_days is not None:
+        today = datetime.utcnow()
+        start_date_dt = today.replace(hour=0, minute=0, second=0, microsecond=0)
+        if prev_days > 0:
+            from datetime import timedelta
+            start_date_dt = start_date_dt - timedelta(days=prev_days)
+        start_date = start_date_dt.strftime('%Y-%m-%d')
+    else:
+        # Use the original date handling
+        start_date = data.get('start_date', datetime.utcnow().strftime('%Y-%m-%d'))
+    
+    end_date = data.get('end_date', datetime.utcnow().strftime('%Y-%m-%d'))
 
     # Validate and format start_date and end_date
     try:
