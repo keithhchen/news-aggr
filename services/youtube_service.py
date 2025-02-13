@@ -203,8 +203,7 @@ def update_missing_transcripts(limit: int = 2) -> Dict[str, Any]:
 
 def get_transcription(video_url):
     """Retrieve transcription and metadata for a given video URL."""
-    # api_host = "https://yt-dlp-flask-599346845441.asia-east1.run.app"
-    api_host = "http://yt:5000" # docker network
+    api_host = load_api_key("YT_DLP_HOST")
     api_url = f"{api_host}/transcribe?url={video_url}"
     
     try:

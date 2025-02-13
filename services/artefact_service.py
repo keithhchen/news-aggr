@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 import requests
 import services.youtube_video_service as YoutubeVideoService
 from utils.md2html import style_html
+from utils.main import load_api_key
 
 def create_artefact(artefact_data: Dict[str, Any]) -> Dict[str, Any]:
     """创建新的 artefact 记录"""
@@ -95,6 +96,7 @@ SOURCE_MODEL_MAP = {
 
 def process_artefact_data(source: str, source_id: str) -> Optional[Dict[str, Any]]:
     """处理 artefact 数据，包括从源表获取数据和调用外部 API"""
+    api_host = load_api_key("WPA_LANG_HOST")
 
     try:
         if source not in SOURCE_MODEL_MAP:
@@ -111,8 +113,6 @@ def process_artefact_data(source: str, source_id: str) -> Optional[Dict[str, Any
             current_app.logger.error(error_msg)
             raise ValueError(error_msg)
         
-        api_host = "https://wpa-langgraph-599346845441.asia-east1.run.app"
-        # api_host = "http://lang_dev:8000"
         
         # 调用外部 API
         response = requests.post(
