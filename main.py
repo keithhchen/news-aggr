@@ -7,6 +7,7 @@ from utils.main import load_api_key
 from controller.youtube_bp import youtube_bp
 from controller.artefact_bp import artefact_bp
 from controller.publisher_bp import publisher_bp
+from middleware.webhook import webhook_middleware
 
 app = Flask(__name__)
 
@@ -14,6 +15,9 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = load_api_key("database_url")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
+
+# Register webhook middleware
+app.after_request(webhook_middleware())
 
 app.register_blueprint(youtube_bp, url_prefix='/youtube')
 app.register_blueprint(artefact_bp, url_prefix='/artefact')
