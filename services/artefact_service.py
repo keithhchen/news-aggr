@@ -96,7 +96,7 @@ SOURCE_MODEL_MAP = {
 
 def process_artefact_data(source: str, source_id: str) -> Optional[Dict[str, Any]]:
     """处理 artefact 数据，包括从源表获取数据和调用外部 API"""
-    api_host = load_api_key("WPA_LANG_HOST")
+    api_host = load_api_key("WPA_LANGGRAPH_HOST")
 
     try:
         if source not in SOURCE_MODEL_MAP:
