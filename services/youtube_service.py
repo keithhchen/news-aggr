@@ -154,12 +154,17 @@ def update_missing_transcripts(limit: int = 2) -> Dict[str, Any]:
         YoutubeVideo.formatted_transcript.is_(None)
     ).limit(limit).all()
     
-    results = []
-    total = len(videos)
-    errors = []
+    processed_videos = []
     success_count = 0
     
     for video in videos:
+        result = {
+            'video_id': video.video_id,
+            'title': video.title,
+            'status': 'error',
+            'error': None
+        }
+        
         try:
             data = get_transcription(video.url)
             if 'error' not in data:
@@ -168,37 +173,24 @@ def update_missing_transcripts(limit: int = 2) -> Dict[str, Any]:
                     video.download_url = data.get('download_url')
                     db.session.commit()
                     success_count += 1
-                    status = 'success'
-                    error = None
+                    result['status'] = 'success'
                 except Exception as e:
                     db.session.rollback()
                     current_app.logger.error(f"Database error for video {video.video_id}: {str(e)}")
-                    status = 'error'
-                    error = f"Database error: {str(e)}"
-                    errors.append({"video_id": video.video_id, "error": error})
+                    result['error'] = f"Database error: {str(e)}"
             else:
-                status = 'error'
-                error = data['error']
-                errors.append({"video_id": video.video_id, "error": error})
+                result['error'] = data['error']
         except Exception as e:
             current_app.logger.error(f"Error processing video {video.video_id}: {str(e)}")
-            status = 'error'
-            error = str(e)
-            errors.append({"video_id": video.video_id, "error": error})
+            result['error'] = str(e)
         
-        results.append({
-            'video_id': video.video_id,
-            'title': video.title,
-            'status': status,
-            'error': error
-        })
+        processed_videos.append(result)
     
     return {
-        "total": total,
+        "total": len(videos),
         "success_count": success_count,
-        "error_count": len(errors),
-        "results": results,
-        "errors": errors
+        "error_count": len(videos) - success_count,
+        "videos": processed_videos
     }
 
 def get_transcription(video_url):
