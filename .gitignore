@@ -3,4 +3,3 @@ credentials.json
 **/__pycache__
 .env
 run.py
-batch_request.py

@@ -26,6 +26,7 @@ def get_videos(
     # Apply filters if provided
     if start_date:
         start_date_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        start_date_dt = start_date_dt.replace(hour=0, minute=0, second=0, microsecond=0)
         query = query.filter(YoutubeVideo.published_at >= start_date_dt)
     
     if end_date:

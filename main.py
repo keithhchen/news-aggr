@@ -7,6 +7,7 @@ from utils.main import load_api_key
 from controller.youtube_bp import youtube_bp
 from controller.artefact_bp import artefact_bp
 from controller.publisher_bp import publisher_bp
+from controller.batch_bp import batch_bp
 from middleware.webhook import webhook_middleware
 
 app = Flask(__name__)
@@ -22,6 +23,7 @@ app.after_request(webhook_middleware())
 app.register_blueprint(youtube_bp, url_prefix='/youtube')
 app.register_blueprint(artefact_bp, url_prefix='/artefact')
 app.register_blueprint(publisher_bp, url_prefix='/publisher')
+app.register_blueprint(batch_bp, url_prefix='/batch')
 
 # BUCKET_NAME = 'keith_speech_to_text'
 # storage_client = storage.Client()
